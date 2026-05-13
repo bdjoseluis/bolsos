@@ -1,0 +1,32 @@
+/* =============================================
+   GLOBAL STYLES — bolsos-clari
+   Los tokens de color/fuente se sobreescriben
+   en :root desde ThemeService en runtime.
+   ============================================= */
+
+:root {
+  --color-primary:   #1a1a1a;
+  --color-secondary: #f5f0eb;
+  --color-accent:    #c8a96e;
+  --color-bg:        #ffffff;
+  --color-surface:   #f9f6f2;
+  --color-text:      #2d2d2d;
+  --font-heading:    'Playfair Display', serif;
+  --font-body:       'Lato', sans-serif;
+  --radius-base:     4px;
+  --spacing-unit:    8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+img { display: block; max-width: 100%; }
+button { cursor: pointer; }
