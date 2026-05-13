@@ -1,0 +1,236 @@
+# ==============================================================
+#  Bolsos Clari — Infraestructura de producción con Traefik
+# ==============================================================
+# Redes:
+#   traefik_net  → servicios expuestos al proxy (frontend, apis, cms, herramientas)
+#   backend_net  → red interna; SÓLO DBs + servicios que las necesitan
+#                  Los puertos de BD nunca se mapean al host.
+#
+# Uso rápido:
+#   cp .env.example .env   # rellena las contraseñas
+#   docker compose up -d
+# ==============================================================
+
+name: bolsos-clari
+
+networks:
+  traefik_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+    internal: false   # false para que Odoo/Windmill puedan descargar módulos
+
+volumes:
+  postgres_data:
+  odoo_db_data:
+  odoo_filestore:
+  windmill_db_data:
+  windmill_data:
+
+# ─────────────────────────── TRAEFIK ───────────────────────────
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    command:
+      - "--log.level=INFO"
+      - "--api.dashboard=true"
+      - "--api.insecure=true"                          # dashboard en :8080 (solo local)
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"    # opt-in por etiqueta
+      - "--providers.docker.network=bolsos-clari_traefik_net"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+      - "8080:8080"   # Traefik dashboard → http://traefik.localhost:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_net
+
+  # ─────────────────────── FRONTEND (Angular) ────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: frontend
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`bolsos.local`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+    networks:
+      - traefik_net
+
+  # ─────────────────────── BACKEND (Spring Boot) ─────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bolsosdb}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bolsos_user}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_PROFILES_ACTIVE: prod
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.bolsos.local`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8080"
+    networks:
+      - traefik_net
+      - backend_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────── SANITY STUDIO ─────────────────────────
+  sanity:
+    build:
+      context: ./sanity
+      dockerfile: Dockerfile
+    container_name: sanity
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sanity.rule=Host(`cms.bolsos.local`)"
+      - "traefik.http.routers.sanity.entrypoints=web"
+      - "traefik.http.services.sanity.loadbalancer.server.port=3333"
+    networks:
+      - traefik_net
+
+  # ───────────────────────── ODOO Community ──────────────────────
+  odoo:
+    image: odoo:17
+    container_name: odoo
+    restart: unless-stopped
+    environment:
+      HOST: odoo_db
+      PORT: 5432
+      USER: ${ODOO_DB_USER:-odoo_user}
+      PASSWORD: ${ODOO_DB_PASSWORD}
+    volumes:
+      - odoo_filestore:/var/lib/odoo
+      - ./odoo/addons:/mnt/extra-addons:ro     # addons personalizados (opcional)
+      - ./odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.odoo.rule=Host(`odoo.local`)"
+      - "traefik.http.routers.odoo.entrypoints=web"
+      - "traefik.http.services.odoo.loadbalancer.server.port=8069"
+    networks:
+      - traefik_net
+      - backend_net
+    depends_on:
+      odoo_db:
+        condition: service_healthy
+
+  # ─────────────────────── WINDMILL (servidor) ───────────────────
+  windmill:
+    image: ghcr.io/windmill-labs/windmill:main
+    container_name: windmill
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${WINDMILL_DB_USER:-windmill_user}:${WINDMILL_DB_PASSWORD}@windmill_db:5432/${WINDMILL_DB_NAME:-windmill}
+      BASE_URL: http://automation.local
+      MODE: server
+    volumes:
+      - windmill_data:/tmp/windmill
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.windmill.rule=Host(`automation.local`)"
+      - "traefik.http.routers.windmill.entrypoints=web"
+      - "traefik.http.services.windmill.loadbalancer.server.port=8000"
+    networks:
+      - traefik_net
+      - backend_net
+    depends_on:
+      windmill_db:
+        condition: service_healthy
+
+  windmill_worker:
+    image: ghcr.io/windmill-labs/windmill:main
+    container_name: windmill_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${WINDMILL_DB_USER:-windmill_user}:${WINDMILL_DB_PASSWORD}@windmill_db:5432/${WINDMILL_DB_NAME:-windmill}
+      MODE: worker
+      WORKER_GROUP: default
+      NUM_WORKERS: "2"
+    volumes:
+      - windmill_data:/tmp/windmill
+      - /var/run/docker.sock:/var/run/docker.sock   # necesario para jobs Docker
+    networks:
+      - backend_net
+    depends_on:
+      - windmill
+
+  # ══════════════════════════ BASES DE DATOS ══════════════════════
+  # ATENCIÓN: ninguna BD mapea puertos al host.
+  # Solo son accesibles desde dentro de backend_net.
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bolsosdb}
+      POSTGRES_USER: ${POSTGRES_USER:-bolsos_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # ⛔ SIN "ports:" → inaccesible desde el host
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bolsos_user} -d ${POSTGRES_DB:-bolsosdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  odoo_db:
+    image: postgres:16-alpine
+    container_name: odoo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres          # Odoo gestiona sus propias DBs
+      POSTGRES_USER: ${ODOO_DB_USER:-odoo_user}
+      POSTGRES_PASSWORD: ${ODOO_DB_PASSWORD}
+    volumes:
+      - odoo_db_data:/var/lib/postgresql/data
+    # ⛔ SIN "ports:" → inaccesible desde el host
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ODOO_DB_USER:-odoo_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  windmill_db:
+    image: postgres:16-alpine
+    container_name: windmill_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${WINDMILL_DB_NAME:-windmill}
+      POSTGRES_USER: ${WINDMILL_DB_USER:-windmill_user}
+      POSTGRES_PASSWORD: ${WINDMILL_DB_PASSWORD}
+    volumes:
+      - windmill_db_data:/var/lib/postgresql/data
+    # ⛔ SIN "ports:" → inaccesible desde el host
+    networks:
+      - backend_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${WINDMILL_DB_USER:-windmill_user} -d ${WINDMILL_DB_NAME:-windmill}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
