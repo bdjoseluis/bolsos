@@ -76,7 +76,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-bolsosdb}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-bolsos_user}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update   # crea las tablas en el primer arranque
       SPRING_PROFILES_ACTIVE: prod
     labels:
       - "traefik.enable=true"
