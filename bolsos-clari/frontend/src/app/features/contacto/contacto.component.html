@@ -1,0 +1,148 @@
+<article class="contacto">
+
+  <!-- Columna izquierda: decoración -->
+  <div class="contacto__deco" aria-hidden="true">
+    <div class="contacto__deco-bar"></div>
+    <span class="contacto__deco-text">
+      <span class="contacto__deco-clara">clara</span><span
+        class="contacto__deco-eugenia">eugenia</span>
+    </span>
+    <span class="contacto__deco-dot"></span>
+    <p class="contacto__deco-tagline">Producto atemporal<br>con un toque de poesía</p>
+    <p class="contacto__deco-country">España</p>
+  </div>
+
+  <!-- Columna derecha: info + formulario -->
+  <div class="contacto__info" reveal>
+
+    <nav class="contacto__breadcrumb" aria-label="Ruta">
+      <span><em>c</em>ontacto</span>
+    </nav>
+
+    <h1 class="contacto__title">
+      <em>c</em>ontacto
+    </h1>
+
+    <dl class="contacto__data">
+      <div class="contacto__row">
+        <dt>Dirección</dt>
+        <dd>
+          Sant Gaietà, 2C. Bajo 2<br>
+          03330 <em>Crevillent</em> (Alicante)
+        </dd>
+      </div>
+
+      <div class="contacto__row">
+        <dt>Teléfono</dt>
+        <dd>
+          <a href="tel:+34626138774">+34 626 138 774</a>
+        </dd>
+      </div>
+
+      <div class="contacto__row">
+        <dt>Web</dt>
+        <dd>
+          <a href="https://www.claraeugenia.com" target="_blank" rel="noopener">
+            www.claraeugenia.com
+          </a>
+        </dd>
+      </div>
+
+      <div class="contacto__row">
+        <dt>Email</dt>
+        <dd>
+          <a href="mailto:claraeugenia​estudio@gmail.com">
+            claraeugenia​estudio&#64;gmail.com
+          </a>
+        </dd>
+      </div>
+    </dl>
+
+    <!-- Formulario de contacto -->
+    @if (estado() !== 'ok') {
+      <form class="contacto__form" (ngSubmit)="enviar()" novalidate>
+        <h2 class="contacto__form-title">Escríbenos</h2>
+
+        <div class="contacto__field">
+          <label for="nombre">Nombre *</label>
+          <input
+            id="nombre"
+            type="text"
+            [ngModel]="nombre()"
+            (ngModelChange)="nombre.set($event)"
+            name="nombre"
+            placeholder="Tu nombre"
+            required
+          />
+        </div>
+
+        <div class="contacto__field">
+          <label for="email">Email *</label>
+          <input
+            id="email"
+            type="email"
+            [ngModel]="email()"
+            (ngModelChange)="email.set($event)"
+            name="email"
+            placeholder="tu@email.com"
+            required
+          />
+        </div>
+
+        <div class="contacto__field">
+          <label for="telefono">Teléfono</label>
+          <input
+            id="telefono"
+            type="tel"
+            [ngModel]="telefono()"
+            (ngModelChange)="telefono.set($event)"
+            name="telefono"
+            placeholder="+34 600 000 000"
+          />
+        </div>
+
+        <div class="contacto__field">
+          <label for="mensaje">Mensaje</label>
+          <textarea
+            id="mensaje"
+            [ngModel]="mensaje()"
+            (ngModelChange)="mensaje.set($event)"
+            name="mensaje"
+            rows="4"
+            placeholder="¿En qué podemos ayudarte?"
+          ></textarea>
+        </div>
+
+        @if (estado() === 'error') {
+          <p class="contacto__error">Ha ocurrido un error. Inténtalo de nuevo.</p>
+        }
+
+        <button
+          type="submit"
+          class="contacto__submit"
+          [disabled]="estado() === 'loading' || !nombre() || !email()"
+        >
+          {{ estado() === 'loading' ? 'Enviando...' : 'Enviar mensaje' }}
+        </button>
+      </form>
+    }
+
+    @if (estado() === 'ok') {
+      <div class="contacto__success">
+        <p>¡Gracias! Hemos recibido tu mensaje y te responderemos pronto.</p>
+        <button class="contacto__cta" (click)="estado.set('idle')">Enviar otro</button>
+      </div>
+    }
+
+    <!-- CTA colección -->
+    <a class="contacto__cta" routerLink="/coleccion">
+      <em>v</em>er la colección
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="1.8">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
+
+  </div>
+
+</article>
