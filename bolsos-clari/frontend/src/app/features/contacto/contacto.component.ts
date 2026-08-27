@@ -2,9 +2,10 @@ import { Component, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { RevealDirective } from '../../shared/directives/reveal.directive';
+import { environment } from '../../../environments/environment';
 
-const API_URL = 'https://api.bdev.qzz.io/api/integrations/lead';
-const API_KEY = 'bdev_int_key_2026';
+const API_URL = environment.integracionLeads.url;
+const API_KEY = environment.integracionLeads.clave;
 
 @Component({
   selector: 'app-contacto',
